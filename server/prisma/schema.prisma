@@ -7,18 +7,152 @@ datasource db {
   provider = "postgresql"
 }
 
-model User { 
-  id    Int     @id @default(autoincrement()) 
-  email String  @unique
-  name  String?
-  posts Post[]
-} 
+model User {
+  id                    String               @id @default(uuid())
+  email                 String               @unique
+  name                  String
+  password              String
+  profileAvatar         String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  
+  // Relations
+  groupsCreated         Group[]              @relation("GroupCreator")
+  groupMemberships      GroupMember[]
+  expensesPaid          Expense[]            @relation("ExpensePaidBy")
+  expenseSplits         ExpenseSplit[]
+  invitationsSent       GroupInvitation[]    @relation("InvitedBy")
+  invitationsReceived   GroupInvitation[]    @relation("InvitedUser")
+  notifications         Notification[]
+  debtPaymentsSent      DebtPayment[]        @relation("DebtPaymentPayer")
+  debtPaymentsReceived  DebtPayment[]        @relation("DebtPaymentReceiver")
+}
 
-model Post { 
-  id        Int     @id @default(autoincrement()) 
-  title     String
-  content   String?
-  published Boolean @default(false) 
-  author    User    @relation(fields: [authorId], references: [id]) 
-  authorId  Int
+model Group {
+  id                    String               @id @default(uuid())
+  name                  String
+  description           String?
+  createdBy             String
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  
+  // Relations
+  creator               User                 @relation("GroupCreator", fields: [createdBy], references: [id])
+  members               GroupMember[]
+  expenses              Expense[]
+  invitations           GroupInvitation[]
+  notifications         Notification[]
+  debtPayments          DebtPayment[]
+  
+  @@index([createdBy])
+}
+
+model GroupMember {
+  id                    String               @id @default(uuid())
+  userId                String
+  groupId               String
+  joinedAt              DateTime             @default(now())
+  
+  // Relations
+  user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group                 Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, groupId])
+  @@index([userId])
+  @@index([groupId])
+}
+
+model GroupInvitation {
+  id                    String               @id @default(uuid())
+  groupId               String
+  invitedUserId         String
+  invitedByUserId       String
+  status                String               @default("pending")  // pending, accepted, rejected
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  
+  // Relations
+  group                 Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  invitedUser           User                 @relation("InvitedUser", fields: [invitedUserId], references: [id], onDelete: Cascade)
+  invitedBy             User                 @relation("InvitedBy", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  notifications         Notification[]
+  
+  @@unique([groupId, invitedUserId])
+  @@index([groupId])
+  @@index([invitedUserId])
+  @@index([invitedByUserId])
+  @@index([status])
+}
+
+model Notification {  
+  id             String            @id @default(uuid())
+  userId         String
+  type           String
+  message        String
+  groupId        String?
+  invitationId   String?
+  isRead         Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group          Group?            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  invitation     GroupInvitation?  @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([groupId])
+  @@index([invitationId])
+  @@index([isRead])
+}
+
+model Expense {
+  id                    String               @id @default(uuid())
+  amount                Float
+  description           String?
+  paidBy                String
+  groupId               String
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  
+  // Relations
+  paidByUser            User                 @relation("ExpensePaidBy", fields: [paidBy], references: [id])
+  group                 Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  splits                ExpenseSplit[]
+  
+  @@index([paidBy])
+  @@index([groupId])
+}
+
+model ExpenseSplit {
+  id                    String               @id @default(uuid())
+  expenseId             String
+  userId                String
+  shareAmount           Float
+  createdAt             DateTime             @default(now())
+  
+  // Relations
+  expense               Expense              @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([expenseId, userId])
+  @@index([expenseId])
+  @@index([userId])
+}
+
+model DebtPayment {
+  id                    String               @id @default(uuid())
+  amount                Float
+  paidBy                String  // user who paid
+  paidTo                String  // user who received
+  groupId               String
+  createdAt             DateTime             @default(now())
+  
+  // Relations
+  payer                 User                 @relation("DebtPaymentPayer", fields: [paidBy], references: [id])
+  receiver              User                 @relation("DebtPaymentReceiver", fields: [paidTo], references: [id])
+  group                 Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  @@index([paidBy])
+  @@index([paidTo])
+  @@index([groupId])
 } 
